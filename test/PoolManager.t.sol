@@ -11,6 +11,8 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {PoolModifyLiquidityTest} from "v4-core/test/PoolModifyLiquidityTest.sol";
+import {SortTokens} from "./SortToken.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 
@@ -23,6 +25,7 @@ contract PoolManagerTest is Test {
     bytes constant ZERO_BYTES = new bytes(0);
 
     IPoolManager manager;
+    PoolModifyLiquidityTest modifyLiquidityRouter;
     IHooks hooks = IHooks(address(0));
     Currency c0;
     Currency c1;
@@ -34,8 +37,10 @@ contract PoolManagerTest is Test {
         MockERC20 token0 = new MockERC20("TEST", "TEST", 18);
         MockERC20 token1 = new MockERC20("TEST", "TEST", 18);
 
-        c0 = Currency.wrap(address(token0));
-        c1 = Currency.wrap(address(token1));
+        (c0, c1) = SortTokens.sort(token0, token1);
+
+        deal(address(token0), address(this), 1000 ether);
+        deal(address(token1), address(this), 1000 ether);
 
         return (c0, c1);
     }
@@ -46,6 +51,7 @@ contract PoolManagerTest is Test {
 
     function setUp() public {
         manager = new PoolManager();
+        modifyLiquidityRouter = new PoolModifyLiquidityTest(manager);
         _initTokens();
     }
 
@@ -74,11 +80,16 @@ contract PoolManagerTest is Test {
         assertEq(protocolFee, 0); //? How to determine the protocolFee
     }
 
-    // function test_addLiquidity() public {
-    //     PoolKey memory key = _getPoolKey();
-    //     manager.initialize(key, SQRT_PRICE_1_1, ZERO_BYTES);
+    function test_addLiquidity() public {
+        PoolKey memory key = _getPoolKey();
+        manager.initialize(key, SQRT_PRICE_1_1, ZERO_BYTES);
 
-    //     IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams(0, 1, 1, bytes32(0));
-    //     manager.modifyLiquidity(key, params, ZERO_BYTES);
-    // }
+        MockERC20(Currency.unwrap(c0)).approve(address(modifyLiquidityRouter), 1000 ether);
+        MockERC20(Currency.unwrap(c1)).approve(address(modifyLiquidityRouter), 1000 ether);
+        IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams(60, 120, 100, bytes32(0));
+
+        modifyLiquidityRouter.modifyLiquidity(key, params, ZERO_BYTES);
+
+        //TODO assert
+    }
 }
